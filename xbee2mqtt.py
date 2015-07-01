@@ -131,7 +131,7 @@ class Xbee2MQTT(Daemon):
 
             value = self.processor.process(topic, value)
             self.log(logging.INFO, "Sending message to MQTT broker: %s %s" % (topic, value))
-            self.mqtt.publish(topic, value)
+            self.mqtt.publish(topic, value, 2, True)
 
     def do_reload(self):
         self.log(logging.INFO, "Reloading")

@@ -14,17 +14,17 @@ import os
 import sys
 import time
 import logging
+import logging.handlers
 import dbm
 
 from datetime import datetime
-from libs.daemon import Daemon
 from libs.processor import Processor
 from libs.config import Config
 from twython import Twython
 import paho.mqtt.client as mqtt
 import urllib2
 
-class SfePush(Daemon):
+class SfePush:
 
     NORTH_DOOR_TOPIC = '/home/garage/door/status/north'
     SOUTH_DOOR_TOPIC = '/home/garage/door/status/south'
@@ -59,8 +59,6 @@ class SfePush(Daemon):
     twapi = None
 
     def __init__(self, pidfile, stdin="/dev/null", stdout='/dev/null', stderr='/dev/null'):
-        #super(Daemon, self).__init__(pidfile, stdin, stdout, stderr)
-        Daemon.__init__(self, pidfile, stdin, stdout, stderr)
 
         def resolve_path(path):
             return path if path[0] == '/' else os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
@@ -68,7 +66,8 @@ class SfePush(Daemon):
         self.config_file = resolve_path('config/sfe_push.yaml');
         self.config = Config(config_file)
 
-        self.handler = logging.StreamHandler()
+        #self.handler = logging.StreamHandler()
+        self.handler = logging.handlers.RotatingFileHandler('/tmp/sfe_push.log', maxBytes=1024*1024, backupCount=5)
         self.formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         self.handler.setFormatter(self.formatter)
 
@@ -98,13 +97,15 @@ class SfePush(Daemon):
         cons_sec = config.get('twitter', 'consumer_secret', None)
         acc_key = config.get('twitter', 'access_key', None)
         acc_sec = config.get('twitter', 'access_secret', None)
-        self.twapi = Twython(cons_key, cons_sec, acc_key, acc_sec) 
-        self.log(logging.DEBUG, 'Initialized Twython')
+        if cons_key: 
+            self.twapi = Twython(cons_key, cons_sec, acc_key, acc_sec) 
+            self.log(logging.DEBUG, 'Initialized Twython')
+        else:
+            self.log(logging.DEBUG, 'Skipping Twython initialization')
 
     def stop(self):
         """ Shutdown the external resources and close the db """
         self.mqttc.disconnect() 
-        Daemon.stop(self)
 
     def on_connect(self, mqttc, obj, flags, rc):
         self.log(logging.DEBUG, "Connected to %s:%s" % (mqttc._host, mqttc._port))
@@ -132,13 +133,15 @@ class SfePush(Daemon):
             self.log(logging.DEBUG, 'nd %s sd %s tmpf %s' % (self.north_door, self.south_door, self.tempf))
 
         if self.north_door != 'x' and ('north_door' not in self.db.keys() or self.north_door != self.db['north_door']):
-            #self.twapi.update_status(status='%s North door %s!' % (str(datetime.now()), self.north_door))
-            self.twapi.send_direct_message(screen_name='cslauritsen', text='%s North door %s!' % (str(datetime.now()), self.north_door))
+            if self.twapi:
+                #self.twapi.update_status(status='%s North door %s!' % (str(datetime.now()), self.north_door))
+                self.twapi.send_direct_message(screen_name='cslauritsen', text='%s North door %s!' % (str(datetime.now()), self.north_door))
             self.db['north_door'] = self.north_door
 
         if self.south_door != 'x' and ('south_door' not in self.db.keys() or self.south_door != self.db['south_door']):
-            #self.twapi.update_status(status='%s South door %s!' % (str(datetime.now()), self.south_door))
-            self.twapi.send_direct_message(screen_name='cslauritsen', text='%s South door %s!' % (str(datetime.now()), self.south_door))
+            if self.twapi:
+                #self.twapi.update_status(status='%s South door %s!' % (str(datetime.now()), self.south_door))
+                self.twapi.send_direct_message(screen_name='cslauritsen', text='%s South door %s!' % (str(datetime.now()), self.south_door))
             self.db['south_door'] = self.south_door
 
     def on_publish(self, mqttc, obj, mid):
@@ -168,10 +171,14 @@ class SfePush(Daemon):
         rc = 0
         while i < 9:
             while rc == 0:
-                rc = self.mqttc.loop()
-            i = i + 1
-            self.log(logging.DEBUG, "rc: "+str(rc))
+                rc = self.mqttc.loop_forever()
+                if rc == 0:
+                    i = 0
+                else:
+                    self.log(logging.DEBUG, "rc: "+str(rc))
+                i = i + 1
 
+        self.log(logging.DEBUG, "rc: "+str(rc))
         self.db.close()
 
 
@@ -183,29 +190,14 @@ class SfePush(Daemon):
         return path if path[0] == '/' else os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
 if "__main__" == __name__:
-    if len(sys.argv) == 2:
-        def resolve_path(path):
-            return path if path[0] == '/' else os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
+    def resolve_path(path):
+        return path if path[0] == '/' else os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
-        config_file = resolve_path('config/sfe_push.yaml');
-        config = Config(config_file)
+    config_file = resolve_path('config/sfe_push.yaml');
+    config = Config(config_file)
 
-        me = SfePush(resolve_path(config.get('general', 'pidfile', '/tmp/sfe_push.pid')))
-        me.config = config
-        me.stdout = me.stderr = resolve_path(config.get('general', 'stdout', '/dev/null'))
+    me = SfePush(resolve_path(config.get('general', 'pidfile', '/tmp/sfe_push.pid')))
+    me.config = config
+    me.stdout = me.stderr = resolve_path(config.get('general', 'stdout', '/dev/null'))
 
-        if 'start' == sys.argv[1]:
-            me.start()
-        elif 'stop' == sys.argv[1]:
-            me.stop()
-        elif 'restart' == sys.argv[1]:
-            me.restart()
-        elif 'reload' == sys.argv[1]:
-            me.reload()
-        else:
-            print "Unknown command"
-            sys.exit(2)
-        sys.exit(0)
-    else:
-        print "usage: %s start|stop|restart" % sys.argv[0]
-        sys.exit(2)
+    me.run()
