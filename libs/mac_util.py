@@ -5,6 +5,7 @@ from Crypto.Cipher import AES
 from Crypto import Random
 import binascii
 import time
+import sys
 
 
 class MACUtil:
@@ -48,5 +49,12 @@ class MACUtil:
 if __name__ == "__main__":
     key = '0123456789abcdef'
     mu = MACUtil(key)
-    msg = mu.create_mac()
-    print msg, ' is authentic?=' 'yes' if mu.authenticate_mac(msg) else 'no'
+
+    if len(sys.argv) > 1:
+        msg = sys.argv[1]
+        isgood = mu.authenticate_mac(msg)
+        print msg, ' is authentic?=' 'yes' if isgood else 'no'
+    else:
+        msg = mu.create_mac()
+        print msg, ' is authentic?=' 'yes' if mu.authenticate_mac(msg) else 'no'
+
