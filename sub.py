@@ -56,10 +56,11 @@ if __name__ == "__main__":
 
     client = mqtt.Client()
     client.on_message = on_message
-    client.username_pw_set(username, password)
+    if username:
+      client.username_pw_set(username, password)
     client.connect(host, port, 60)
 
-    client.subscribe('/home/#', qos=0)
+    client.subscribe('#', qos=0)
 
     while True:
         try:
