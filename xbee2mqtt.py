@@ -68,6 +68,7 @@ class Xbee2MQTT(Daemon):
                 self._routes[(address, port)] = topic
                 self._actions['%s/set' % topic] = (address, port)
                 self._actions['%s/toggle' % topic] = (address, port)
+                self._actions['%s/tx' % topic] = (address, port)
         self.log(logging.DEBUG, "Routes: %s" % self._routes)
 
     def log(self, level, message):
@@ -96,7 +97,14 @@ class Xbee2MQTT(Daemon):
             if topic.endswith("/set"): 
                 self.log(logging.INFO, "Setting radio %s port %s to %s" % (address, port, message))
                 try:
-                    retval = self.xbee.send_message(address, port, message, False)
+                    retval = self.xbee.send_message(address, port, message)
+                    self.log(logging.DEBUG, "xbee.send_message retval %s"  % retval)
+                except Exception as e:
+                    self.log(logging.ERROR, "Error while sending message (%s)" % e)
+            elif topic.endswith("/tx"): 
+                self.log(logging.INFO, "Sending TX to radio %s length: %d"  % (address, len(message)))
+                try:
+                    retval = self.xbee.transmit(address, message.payload)
                     self.log(logging.DEBUG, "xbee.send_message retval %s"  % retval)
                 except Exception as e:
                     self.log(logging.ERROR, "Error while sending message (%e)" % e)

@@ -83,13 +83,15 @@ class XBeeWrapper(object):
         id = packet['id']
         if(id == "rx_io_data_long_addr"):
             frame_id = 92
+        elif(id == "rx"):
+            frame_id = 90
 
         # Data sent through the serial connection of the remote radio
         if (frame_id == 90):
 
             # Some streams arrive split in different packets
             # we buffer the data until we get an EOL
-            self.buffer[address] = self.buffer.get(address,'') + packet['data']
+            self.buffer[address] = self.buffer.get(address,'') + packet['rf_data']
             count = self.buffer[address].count('\n')
             if (count):
                 lines = self.buffer[address].splitlines()
@@ -142,6 +144,15 @@ class XBeeWrapper(object):
 
         return False
 
+    def transmit(self, address, rf_data):
+        """
+        transmit bytes to a remote radio
+        """
+        ## TODO: replace with 15-bit addressing
+        self.xbee.tx_long_addr(dest_addr_long = address, data=rf_data)
+        return True
+
+
     def send_message(self, address, port, value, permanent = True):
         """
         Sends a message to a remote radio
@@ -151,7 +162,7 @@ class XBeeWrapper(object):
 
             if port[:3] == 'dio':
                 address = binascii.unhexlify(address)
-                number = int(port[3:])
+                number = int(port[4:])
                 command = 'P%d' % (number - 10) if number>9 else 'D%d' % number
                 value = binascii.unhexlify('0' + str(int(value) + 4))
                 self.xbee.remote_at(dest_addr_long = address, command = command, parameter = value)
