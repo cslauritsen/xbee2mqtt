@@ -104,10 +104,10 @@ class Xbee2MQTT(Daemon):
             elif topic.endswith("/tx"): 
                 self.log(logging.INFO, "Sending TX to radio %s length: %d"  % (address, len(message)))
                 try:
-                    retval = self.xbee.transmit(address, message.payload)
+                    retval = self.xbee.transmit(address, message)
                     self.log(logging.DEBUG, "xbee.send_message retval %s"  % retval)
                 except Exception as e:
-                    self.log(logging.ERROR, "Error while sending message (%e)" % e)
+                    self.log(logging.ERROR, "Error while sending message (%s)" % e)
             elif topic.endswith("/toggle"):
                 self.log(logging.INFO, "Toggling radio %s port %s" % (address, port))
                 try:

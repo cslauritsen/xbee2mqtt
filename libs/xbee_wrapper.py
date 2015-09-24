@@ -29,6 +29,7 @@ import glob
 import binascii
 import logging
 import time
+import sys
 from xbee import ZigBee
 
 class XBeeWrapper(object):
@@ -78,42 +79,44 @@ class XBeeWrapper(object):
 
         self.log(logging.DEBUG, packet)
 
-        address = binascii.hexlify(packet['source_addr_long'])
-        #frame_id = int(packet['frame_id'])
-        id = packet['id']
-        if(id == "rx_io_data_long_addr"):
-            frame_id = 92
-        elif(id == "rx"):
-            frame_id = 90
+        if 'source_addr_long' in packet:
+          address = binascii.hexlify(packet['source_addr_long'])
+          #frame_id = int(packet['frame_id'])
+          id = packet['id']
+          if(id == "rx_io_data_long_addr"):
+              frame_id = 92
+          elif(id == "rx"):
+              frame_id = 90
 
-        # Data sent through the serial connection of the remote radio
-        if (frame_id == 90):
+          # Data sent through the serial connection of the remote radio
+          if (frame_id == 90):
 
-            # Some streams arrive split in different packets
-            # we buffer the data until we get an EOL
-            self.buffer[address] = self.buffer.get(address,'') + packet['rf_data']
-            count = self.buffer[address].count('\n')
-            if (count):
-                lines = self.buffer[address].splitlines()
-                try:
-                    self.buffer[address] = lines[count:][0]
-                except:
-                    self.buffer[address] = ''
-                for line in lines[:count]:
-                    line = line.rstrip()
-                    try:
-                        port, value = line.split(':', 1)
-                    except:
-                        value = line
-                        port = self.default_port_name
-                    self.on_message(address, port, value)
+              # Some streams arrive split in different packets
+              # we buffer the data until we get an EOL
+              self.buffer[address] = self.buffer.get(address,'') + packet['rf_data']
+              count = self.buffer[address].count('\n')
+              if (count):
+                  lines = self.buffer[address].splitlines()
+                  try:
+                      self.buffer[address] = lines[count:][0]
+                  except:
+                      self.buffer[address] = ''
+                  for line in lines[:count]:
+                      line = line.rstrip()
+                      try:
+                          port, value = line.split(':', 1)
+                      except:
+                          value = line
+                          port = self.default_port_name
+                      self.on_message(address, port, value)
 
-        # Data received from an IO data sample
-        if (frame_id == 92):
+                # Data received from an IO data sample
+          if (frame_id == 92):
             for sample in packet['samples']:
                 self.log(logging.DEBUG, sample)
                 for port in sample.keys():
                     value = sample[port]
+                    sys.stderr.write("Port:Val %s:%d " % (port, value))
                     if port[:3] == 'dio':
                         value = 1 if value else 0
                     self.on_message(address, port, value)
@@ -149,7 +152,8 @@ class XBeeWrapper(object):
         transmit bytes to a remote radio
         """
         ## TODO: replace with 15-bit addressing
-        self.xbee.tx_long_addr(dest_addr_long = address, data=rf_data)
+        address = binascii.unhexlify(address)
+        self.xbee.tx(dest_addr_long = address, dest_addr='\xff\xfe', data=rf_data)
         return True
 
 
